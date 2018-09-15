@@ -32,11 +32,11 @@ elif [ "$BRANCH_NAME" != "master" ]; then
   git rebase
 fi
 
-if [ $ACTION = "deploy" ]; then
+if [ $ACTION == "deploy" ]; then
     echo "Updating services.${UPDATED_SERVICE} to use image $NEW_IMAGE"
     yaml set $COMPOSE_FILE_PATH "services.${UPDATED_SERVICE}.image" $NEW_IMAGE > /tmp/temp-file.yml 
     yaml set /tmp/temp-file.yml "services.${UPDATED_SERVICE}.labels.source-branch" $BRANCH_NAME > $COMPOSE_FILE_PATH
-elif [ $ACTION = "undeploy" ]; then
+elif [ $ACTION == "undeploy" ]; then
     yaml set $COMPOSE_FILE_PATH "services.${UPDATED_SERVICE}.labels.source-branch" master > /tmp/temp-file.yml
     mv /tmp/temp-file.yml $COMPOSE_FILE_PATH
 
