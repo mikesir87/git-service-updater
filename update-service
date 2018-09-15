@@ -1,0 +1,56 @@
+#/bin/sh
+
+set -e
+
+# Setup
+mkdir ~/.ssh
+echo "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+echo "$SSH_DEPLOY_KEY" > ~/.ssh/id_rsa
+chmod 400 ~/.ssh/id_rsa
+git config --global user.email "${GIT_EMAIL}"
+git config --global user.name "${GIT_NAME}"
+
+set -x
+
+# Swap out origin, as the runner uses the HTTP clone URL,
+# which we can't use with deploy keys
+git remote rm origin
+git remote add origin $REPO_CLONE_URL
+git fetch
+
+# Make sure master is up-to-date in case we branch from it
+git checkout master && git branch --set-upstream-to=origin/master master && git rebase 
+
+HAS_REMOTE=$(git branch -r | grep $BRANCH_NAME || true)
+
+# If branch doesn't exist, create it. Otherwise, check it out and update to use SSH-based origin
+if [ -z "$HAS_REMOTE" ]; then
+  git checkout -b $BRANCH_NAME || git checkout $BRANCH_NAME
+elif [ "$BRANCH_NAME" != "master" ]; then
+  git branch -D $BRANCH_NAME || true
+  git checkout -b $BRANCH_NAME --track origin/$BRANCH_NAME
+  git rebase
+fi
+
+if [ $ACTION = "deploy" ]; then
+    echo "Updating services.${UPDATED_SERVICE} to use image $NEW_IMAGE"
+    yaml set $COMPOSE_FILE_PATH "services.${UPDATED_SERVICE}.image" $NEW_IMAGE > /tmp/temp-file.yml 
+    yaml set /tmp/temp-file.yml "services.${UPDATED_SERVICE}.labels.source-branch" $BRANCH_NAME > $COMPOSE_FILE_PATH
+elif [ $ACTION = "undeploy" ]; then
+    yaml set $COMPOSE_FILE_PATH "services.${UPDATED_SERVICE}.labels.source-branch" master > /tmp/temp-file.yml
+    mv /tmp/temp-file.yml $COMPOSE_FILE_PATH
+
+    # Are there any non-master branches? If not, delete this branch
+    if grep source-branch $COMPOSE_FILE_PATH | grep -qv $BRANCH_NAME
+    then
+        git push origin --delete $BRANCH_NAME
+        exit;
+    fi
+fi
+
+
+# Commit and push
+git add .
+git commit -m "Stack update for $UPDATED_SERVICE:$BRANCH_NAME"
+git push -u origin $BRANCH_NAME
+
