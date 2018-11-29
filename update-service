@@ -56,6 +56,6 @@ fi
 
 # Commit and push
 git add .
-git commit -m "Stack update for $UPDATED_SERVICE:$BRANCH_NAME"
+git commit -m "Stack update for $UPDATED_SERVICE:$BRANCH_NAME" || true
 git push -u origin $BRANCH_NAME
 
